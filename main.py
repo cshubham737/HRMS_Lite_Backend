@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
+import pytz
 from datetime import datetime
 from bson import ObjectId
 import os
@@ -142,15 +143,16 @@ async def create_employee(employee: EmployeeCreate):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already exists"
             )
-        
+        ist = pytz.timezone("Asia/Kolkata")
+        current_time = datetime.now(ist)
         # Create employee document
         employee_dict = {
             "employee_id": auto_employee_id,
             "full_name": employee.full_name.strip(),
             "email": employee.email.lower(),
             "department": employee.department,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": current_time,
+            "updated_at": current_time
         }
         
         result = db.employees.insert_one(employee_dict)
@@ -311,33 +313,20 @@ async def mark_attendance(attendance: AttendanceCreate):
         })
         
         if existing_attendance:
-            # Update existing
-            db.attendance.update_one(
-                {"_id": existing_attendance["_id"]},
-                {
-                    "$set": {
-                        "status": attendance.status,
-                        "updated_at": datetime.utcnow()
-                    }
-                }
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Attendance already marked for this date"
             )
-            existing_attendance["_id"] = str(existing_attendance["_id"])
-            existing_attendance["status"] = attendance.status
-            existing_attendance["employee_name"] = employee["full_name"]
-            
-            return {
-                "success": True,
-                "message": "Attendance updated successfully",
-                "data": existing_attendance
-            }
-        
-        # Create new
+
+
+        ist = pytz.timezone("Asia/Kolkata")
+        current_time = datetime.now(ist)
         attendance_dict = {
             "employee_id": attendance.employee_id.upper(),
             "date": attendance_date,
             "status": attendance.status,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": current_time,
+            "updated_at": current_time
         }
         
         result = db.attendance.insert_one(attendance_dict)
@@ -404,7 +393,9 @@ async def get_dashboard_summary():
         total_attendance_records = db.attendance.count_documents({})
         
         # Get today's attendance
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        ist = pytz.timezone("Asia/Kolkata")
+        today = datetime.now(ist).strftime("%Y-%m-%d")
+
         today_present = db.attendance.count_documents({"date": today, "status": "Present"})
         today_absent = db.attendance.count_documents({"date": today, "status": "Absent"})
         
